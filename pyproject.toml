@@ -1,0 +1,19 @@
+[tool.poetry]
+name = "autoria-parser"
+version = "0.1.0"
+description = ""
+authors = ["Oleksii Halimov <alexeigalimov@gmail.com>"]
+readme = "README.md"
+packages = [{include = "autoria_parser"}]
+
+[tool.poetry.dependencies]
+python = "^3.11"
+scrapy = "^2.11.0"
+alembic = "^1.12.0"
+sqlalchemy = {extras = ["postgresql"], version = "^2.0.21"}
+python-dotenv = "^1.0.0"
+
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
