@@ -2,11 +2,13 @@ import json
 import re
 import sys
 from typing import Any, Callable, Generator
+
 from scrapy import Spider, Request
 from scrapy.http import TextResponse
 from furl import furl
 
-from src.items import CarItem
+from app.items import CarItem
+from app.pipelines import CarDBPipeline
 
 
 class AutoriaSerpSpider(Spider):
@@ -15,6 +17,8 @@ class AutoriaSerpSpider(Spider):
     base_url: str = "https://auto.ria.com/uk/car/used/"
     mobile_phone_base_url: str = "https://auto.ria.com/users/phones/"
     start_page: int = 1
+
+    custom_settings: dict[str, Any] = {"ITEM_PIPELINES": {CarDBPipeline: 300}}
 
     def start_requests(self) -> Generator[Request, None, None]:
         yield self.build_serp_request(callback=self.parse_serp)
@@ -55,18 +59,24 @@ class AutoriaSerpSpider(Spider):
 
             security_data = self._get_security_data(response)
 
-            yield self.build_phone_number_request(
-                car=car,
-                callback=self.parse_phone_number,
-                car_id=self._get_car_id(response),
-                hash=security_data["hash"],
-                expires=security_data["expires"],
-            )
+            if security_data is None:
+                car["phone_number"] = self._get_phone_number_from_response(response)
+                yield CarItem(car)
+            else:
+                yield self.build_phone_number_request(
+                    car=car,
+                    callback=self.parse_phone_number,
+                    car_id=self._get_car_id(response),
+                    hash=security_data["hash"],
+                    expires=security_data["expires"],
+                )
+
         except Exception as e:
             self.logger.warning(
                 f"Unexpected exception parsing car ({response.url}): {e}",
                 exc_info=sys.exc_info(),
             )
+            yield CarItem(car)
 
     def parse_phone_number(self, response: TextResponse, car: dict[str, Any]):
         try:
@@ -79,6 +89,7 @@ class AutoriaSerpSpider(Spider):
                 f"Unexpected exception parsing phone number ({response.url}): {e}",
                 exc_info=sys.exc_info(),
             )
+            yield CarItem(car)
 
     def build_serp_request(
         self,
@@ -120,11 +131,13 @@ class AutoriaSerpSpider(Spider):
     def get_car_data(self, response: TextResponse) -> dict[str, Any]:
         car_json_data = self._get_car_json(response)
         car_vin = car_json_data.get("vehicleIdentificationNumber")
+        odometer = car_json_data.get("mileageFromOdometer", {})
+        offers = car_json_data.get("offers", {})
         car_data = {
             "url": response.url,
-            "title": car_json_data["name"],
-            "price_usd": int(car_json_data["offers"]["price"]),
-            "odometer": car_json_data["mileageFromOdometer"]["value"],
+            "title": car_json_data.get("name") or self._get_title(response),
+            "price_usd": int(offers.get("price") or self._get_price(response)),
+            "odometer": odometer.get("value"),
             "username": self._get_username(response),
             "image_url": self._get_image_url(response),
             "images_count": self._get_images_count(response),
@@ -150,7 +163,35 @@ class AutoriaSerpSpider(Spider):
 
     def _get_car_json(self, response: TextResponse) -> dict[str, Any]:
         car_json_str = response.xpath('//script[@id="ldJson2"]/text()').get()
-        return json.loads(car_json_str)
+        if car_json_str:
+            return json.loads(car_json_str)
+        return {}
+
+    def _get_title(self, response: TextResponse) -> str:
+        title = response.xpath(
+            '//div[contains(@class, "heading")]/h1[contains(@class, "head")]/@title'
+        ).get()
+
+        if title is None:
+            raise ValueError("Could not extract title")
+
+        return title.strip()
+
+    def _get_price(self, response: TextResponse) -> str:
+        price_paths = [
+            "//aside/section/span[contains(@class, @green)]/text()",
+            '//aside/section/div[contains(@class, "price_value")]/strong/text()',
+        ]
+        for path in price_paths:
+            price_str = response.xpath(path).get()
+            if price_str is not None:
+                matches = re.findall(r"\d", price_str)
+                if not matches:
+                    raise ValueError(f"Could not extract price from {price_str}")
+
+                return "".join(matches)
+
+        raise ValueError("Could not extract price from page")
 
     def _get_username(self, response: TextResponse) -> str | None:
         path_variations = [
@@ -220,13 +261,14 @@ class AutoriaSerpSpider(Spider):
             return car_vin.strip()
         return None
 
-    def _get_security_data(self, response: TextResponse) -> dict[str, str]:
+    def _get_security_data(self, response: TextResponse) -> dict[str, str] | None:
         security_script = response.xpath("//script[@data-hash and @data-expires]")
         hash_value = security_script.xpath("./@data-hash").get()
         expires = security_script.xpath("./@data-expires").get()
 
         if None in [hash_value, expires]:
-            raise ValueError("Could not extract hash or expiration time")
+            self.logger.warning("Could not extract hash or expiration time")
+            return None
 
         return {"hash": hash_value, "expires": expires}
 
@@ -236,17 +278,36 @@ class AutoriaSerpSpider(Spider):
             raise ValueError("Could not extract car id from body")
         return car_id
 
-    def _get_phone_number(self, data: dict[str, Any]) -> int:
-        phone_number_str = data["formattedPhoneNumber"]
+    def _get_phone_number_from_response(self, response: TextResponse) -> int | None:
+        phone_number_str = response.xpath(
+            '//aside/div[contains(@class, "holder-manager")]/div/a[contains(@class, "phone-btn")]/@href'
+        ).get()
 
-        matches = re.findall(r"\d", phone_number_str)
+        if phone_number := self._extract_phone_number(phone_number_str):
+            return int(phone_number)
+        return None
 
+    def _get_phone_number(self, data: dict[str, Any]) -> int | None:
+        phone_number_str = data.get("formattedPhoneNumber")
+
+        if phone_number_str is None:
+            return None
+
+        if phone_number := self._extract_phone_number(phone_number_str):
+            return int("38" + phone_number)
+
+        return None
+
+    def _extract_phone_number(self, string) -> str | None:
+        matches = re.findall(r"\d", string)
         if not matches:
-            raise ValueError(f"Could not extract phone number from {phone_number_str}")
+            self.logger.warning(f"Could not extract phone number from {string}")
+            return None
 
         if len(matches) < 6:
-            raise ValueError(
-                f"Could not extract phone number from {phone_number_str}, extracted {''.join(matches)}"
+            self.logger.warning(
+                f"Could not extract phone number from {string}, extracted {''.join(matches)}"
             )
+            return None
 
-        return int("38" + "".join(matches))
+        return "".join(matches)

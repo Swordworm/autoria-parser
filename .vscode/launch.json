@@ -14,6 +14,16 @@
                 "autoria_serp_spider"
             ],
             "justMyCode": false
+        },
+        {
+            "name": "Exporter command",
+            "type": "python",
+            "request": "launch",
+            "module": "scrapy",
+            "args": [
+                "exporter"
+            ],
+            "justMyCode": false
         }
     ]
 }

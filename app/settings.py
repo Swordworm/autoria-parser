@@ -5,9 +5,8 @@ dotenv.load_dotenv()
 
 BOT_NAME = "autoria-parser"
 
-SPIDER_MODULES = ["src.spiders"]
-NEWSPIDER_MODULE = "src.spiders"
-
+SPIDER_MODULES = ["app.spiders"]
+COMMANDS_MODULE = "app.commands"
 
 # Crawl responsibly by identifying yourself (and your website) on the user-agent
 # USER_AGENT = "src (+http://www.yourdomain.com)"
@@ -88,3 +87,5 @@ DB_DATABASE = os.getenv("DB_DATABASE", "db_name")
 DB_URL = f"{DB_DRIVER}://{DB_USER}:{DB_PASS}@{DB_HOST}:{DB_PORT}/{DB_DATABASE}"
 
 LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")
+
+EXPORT_DIR = "dumps"
