@@ -1,3 +1,4 @@
+import os
 import dotenv
 
 dotenv.load_dotenv()
@@ -15,15 +16,11 @@ NEWSPIDER_MODULE = "src.spiders"
 ROBOTSTXT_OBEY = False
 
 # Configure maximum concurrent requests performed by Scrapy (default: 16)
-# CONCURRENT_REQUESTS = 32
+CONCURRENT_REQUESTS = int(os.getenv("CONCURRENT_REQUESTS", "16"))
 
-# Configure a delay for requests for the same website (default: 0)
-# See https://docs.scrapy.org/en/latest/topics/settings.html#download-delay
-# See also autothrottle settings and docs
 # DOWNLOAD_DELAY = 3
 # The download delay setting will honor only one of:
-# CONCURRENT_REQUESTS_PER_DOMAIN = 16
-# CONCURRENT_REQUESTS_PER_IP = 16
+CONCURRENT_REQUESTS_PER_DOMAIN = int(os.getenv("CONCURRENT_REQUESTS_PER_DOMAIN", "8"))
 
 # Disable cookies (enabled by default)
 # COOKIES_ENABLED = False
@@ -38,31 +35,26 @@ ROBOTSTXT_OBEY = False
 # }
 
 # Enable or disable spider middlewares
-# See https://docs.scrapy.org/en/latest/topics/spider-middleware.html
 # SPIDER_MIDDLEWARES = {
 #    "src.middlewares.SrcSpiderMiddleware": 543,
 # }
 
 # Enable or disable downloader middlewares
-# See https://docs.scrapy.org/en/latest/topics/downloader-middleware.html
 # DOWNLOADER_MIDDLEWARES = {
 #    "src.middlewares.SrcDownloaderMiddleware": 543,
 # }
 
 # Enable or disable extensions
-# See https://docs.scrapy.org/en/latest/topics/extensions.html
 # EXTENSIONS = {
 #    "scrapy.extensions.telnet.TelnetConsole": None,
 # }
 
 # Configure item pipelines
-# See https://docs.scrapy.org/en/latest/topics/item-pipeline.html
 # ITEM_PIPELINES = {
 #    "src.pipelines.SrcPipeline": 300,
 # }
 
 # Enable and configure the AutoThrottle extension (disabled by default)
-# See https://docs.scrapy.org/en/latest/topics/autothrottle.html
 # AUTOTHROTTLE_ENABLED = True
 # The initial download delay
 # AUTOTHROTTLE_START_DELAY = 5
@@ -75,7 +67,6 @@ ROBOTSTXT_OBEY = False
 # AUTOTHROTTLE_DEBUG = False
 
 # Enable and configure HTTP caching (disabled by default)
-# See https://docs.scrapy.org/en/latest/topics/downloader-middleware.html#httpcache-middleware-settings
 # HTTPCACHE_ENABLED = True
 # HTTPCACHE_EXPIRATION_SECS = 0
 # HTTPCACHE_DIR = "httpcache"
@@ -86,3 +77,14 @@ ROBOTSTXT_OBEY = False
 REQUEST_FINGERPRINTER_IMPLEMENTATION = "2.7"
 TWISTED_REACTOR = "twisted.internet.asyncioreactor.AsyncioSelectorReactor"
 FEED_EXPORT_ENCODING = "utf-8"
+
+DB_DRIVER = "postgresql"
+DB_HOST = os.getenv("DB_HOST", "localhost")
+DB_PORT = int(os.getenv("DB_PORT", 5432))
+DB_USER = os.getenv("DB_USER", "postgres")
+DB_PASS = os.getenv("DB_PASS", "")
+DB_DATABASE = os.getenv("DB_DATABASE", "db_name")
+
+DB_URL = f"{DB_DRIVER}://{DB_USER}:{DB_PASS}@{DB_HOST}:{DB_PORT}/{DB_DATABASE}"
+
+LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")
