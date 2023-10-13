@@ -1,0 +1,29 @@
+version: '3'
+
+networks:
+  general:
+    driver: bridge
+
+volumes:
+  db_data:
+    driver: local
+
+services:
+  python:
+    build: .
+    tty: true
+    networks:
+      - general
+
+  postgresql:
+    image: postgres:15
+    environment:
+      - POSTGRES_USER=${DB_USER}
+      - POSTGRES_PASSWORD=${DB_PASS}
+      - POSTGRES_DB=${DB_DATABASE}
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    ports:
+      - '5432:5432'
+    networks:
+      - general
